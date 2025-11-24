@@ -1,0 +1,28 @@
+Lab 5 Copy on Write!
+
+We make our changes on kalloc.c, vm.c, trap.c as well as defs.h
+Vm.c contains the meat of our logic where we modify copyout to make a copy only when we are
+writing unlike the regular implementation. The copyout and uvmcopy are the functions we
+modified. The uvmcopy looks at the parent pages and sees if it is Writable. If so it sets COW to
+1. We map the page to a new page table and increment the refcounter in order for both
+processes to share it. The copyout looks at the pte (page table entries) then looks for if it is
+marked by the cow bit. If it finds the Cow bit it does a memory copy with a memmove and
+advances to the next pages.
+Usertrap in trap.c is where we add our code if r_scause==19. We need to deal with the invalid
+entries for pagetables and wrong pointers (pgbug). We do this by using setkilled(-1), exit(-1) and
+return. This helps pass usertests, though unneeded for cowtest since we don’t pass bad args
+usually.
+
+We then invoke memmove to move our page to another place for the forked copy to use in order
+to write there, and kfree to free up the kalloc called and set the relevant page to 0 only if nobody
+is using it. Else it makes a cody and decrements it so that next kfree it is set to 0. Kfree also
+releases lock1 that we defined in kinit.
+We also define a refcounter that is an array that contains a list of pages with the term on it the
+number of procs using/referring to it. If it still is > 0 we can unlock it and move on else we free it
+up and fill it with junk.
+
+In defs.h we add our incref function. This function in kalloc finds the index of the page from our
+physical address and thus increases the reference counter element at that index by 1. Kalloc
+does a similar thing by assigning a new owner to the page by setting the rfcnt array’s indexed
+position to 1. It also has a memset function before that which fills up the first n bytes with the
+given value.
